@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windows 11 - NTS Windows Installer (AR)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700&display=swap');
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        /* Custom Win11 Style Spinner */
+        .win-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.15);
+            border-top: 4px solid #ffffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .win-spinner-blue {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(0, 120, 212, 0.15);
+            border-top: 4px solid #0078d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Minimalistic Arc Spinner without track */
+        .arc-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid transparent;
+            border-top: 4px solid #ffffff;
+            border-right: 4px solid #ffffff;
+            border-radius: 50%;
+            animation: spin 0.9s cubic-bezier(0.4, 0.1, 0.4, 1) infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Jumping Glowing Dots Animation */
+        .dot-pulse {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .dot-pulse span {
+            width: 14px;
+            height: 14px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 0 0 20px rgba(0, 162, 255, 0.6);
+            animation: jump 1.4s infinite ease-in-out both;
+        }
+
+        .dot-pulse span:nth-child(1) { animation-delay: -0.32s; }
+        .dot-pulse span:nth-child(2) { animation-delay: -0.16s; }
+        .dot-pulse span:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes jump {
+            0%, 80%, 100% {
+                transform: scale(0.6) translateY(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1.2) translateY(-14px);
+                opacity: 1;
+                box-shadow: 0 0 18px rgba(255, 255, 255, 1), 0 0 30px rgba(0, 162, 255, 0.9);
+            }
+        }
+
+        .ts-bg-blue {
+            background-color: #005a9e;
+        }
+
+        .nts-header-bar {
+            background-color: #004578;
+            color: #ffffff;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        /* Custom scrollbar just in case */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen m-0 p-0 select-none bg-white text-gray-800">
+
+    <!-- Top Info Bar (Visible in Setup Screen or optional debugging) -->
+    <div id="audio-info-banner" class="hidden bg-slate-800 text-slate-200 text-xs p-2 text-center absolute top-0 left-0 right-0 z-50 opacity-90 transition-opacity duration-300">
+        💡 <b>Audio Info:</b> Můžete do složky vedle <code>index.html</code> vložit MP3 soubory: <code>sound1_welcome.mp3</code>, <code>sound2_install.mp3</code>, <code>sound3_attention.mp3</code>, <code>sound4_complete.mp3</code>. Pokud neexistují, automaticky se použije vestavěný syntetizátor.
+    </div>
+
+    <!-- MAIN CONTAINER -->
+    <div id="app" class="h-full w-full relative flex flex-col">
+
+        <!-- 0. ÚVODNÍ OBRAZOVKA (Bílé pozadí) -->
+        <div id="screen-welcome" class="screen flex flex-col justify-center items-center h-full w-full p-6 text-center bg-white">
+            <div class="max-w-2xl bg-slate-50 border border-slate-200 rounded-2xl p-8 shadow-xl">
+                <h1 class="text-3xl font-bold text-slate-900 mb-4">Nainstalovat Windows 11 (via NTS)</h1>
+                <p class="text-slate-600 mb-6 text-base leading-relaxed">
+                    Nainstalovat Windows 11 na tento počítač? Detekované médium iso: USB na jednotce E:. Pokud se má stáhnout iso online, je potřeba USB disk odebrat.
+                </p>
+
+                <button id="btn-start-sim" onclick="startSimulation()" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-8 py-3 rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all text-lg mb-8">
+                    Spustit instalaci
+                </button>
+
+                <div class="border-t border-slate-200 pt-6 text-left">
+                    <h2 class="text-lg font-bold text-slate-800 mb-3">Zrychlení</h2>
+                    <div class="space-y-2 text-sm text-slate-700">
+                        <label class="flex items-center p-2 rounded-lg hover:bg-slate-100 cursor-pointer transition">
+                            <input type="radio" name="speed" value="1" checked class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="ml-3 font-medium">Standard (žádné zrychlení)</span>
+                        </label>
+                        <label class="flex items-center p-2 rounded-lg hover:bg-slate-100 cursor-pointer transition">
+                            <input type="radio" name="speed" value="2" class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="ml-3 font-medium">Zrychlení 2x</span>
+                        </label>
+                        <label class="flex items-center p-2 rounded-lg hover:bg-slate-100 cursor-pointer transition">
+                            <input type="radio" name="speed" value="10" class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="ml-3 font-medium">Zrychlení 10x</span>
+                        </label>
+                        <label class="flex items-center p-2 rounded-lg hover:bg-slate-100 cursor-pointer transition">
+                            <input type="radio" name="speed" value="1min" class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="ml-3 font-medium">Každý časovač 1 minuta</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PERMANENT NTS HEADER STRIP (Hidden initially) -->
+        <div id="nts-header" class="nts-header-bar hidden w-full py-2.5 px-6 text-sm shadow-md flex justify-between items-center z-40">
+            <span>NTS - New Technology Software - Windows 11 Installer (AR)</span>
+            <span id="timer-display" class="text-xs opacity-75 font-mono"></span>
+        </div>
+
+        <!-- DYNAMICKÁ PLOCHA PRO KROKY SIMULACE -->
+        <div id="simulation-viewport" class="flex-1 relative w-full h-full overflow-auto">
+
+            <!-- 1. FORMULÁŘ: Základní informace -->
+            <div id="screen-form" class="screen hidden flex-col justify-center items-center h-full w-full bg-white p-6">
+                <div class="max-w-md w-full bg-slate-50 border border-slate-200 p-8 rounded-2xl shadow-xl">
+                    <h2 class="text-2xl font-bold text-slate-900 mb-6 border-b pb-3">Základní informace</h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Název tohoto PC:</label>
+                            <input type="text" id="input-pc-name" oninput="checkForm()" placeholder="Napsat zde" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Vytvořit uživatele:</label>
+                            <input type="text" id="input-user-name" oninput="checkForm()" placeholder="např. Adam Rudolfský" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Název složky na serveru:</label>
+                            <input type="text" id="input-folder-name" oninput="checkForm()" placeholder="např. WIN11_DEPLOY_01" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div class="mt-8 flex justify-end">
+                        <button id="btn-install" onclick="startInstallationProcess()" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg shadow transition-all">
+                            Instalovat
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. PROBÍHÁ PŘÍPRAVA SOUBORŮ (Modrá obrazovka, vycentrovaný text) -->
+            <div id="screen-prep-files" class="screen hidden flex-col justify-center items-center h-full w-full bg-blue-600 text-white p-6">
+                <div class="text-center space-y-6">
+                    <h2 class="text-3xl md:text-4xl font-semibold tracking-wide">Probíhá příprava souborů...</h2>
+                    <div class="flex justify-center pt-2">
+                        <div class="win-spinner"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. BÍLÉ OBRAZOVKY S NTS STRIPEM A SPINNEREM -->
+            <div id="screen-white-step" class="screen hidden flex-col h-full w-full bg-white p-8 md:p-16 text-slate-900">
+                <div class="max-w-4xl">
+                    <h2 id="white-step-title" class="text-3xl font-bold mb-3 text-slate-900">Připravuje se instalace</h2>
+                    <p id="white-step-subtitle" class="text-lg text-slate-600 mb-8 font-medium"></p>
+                    <div class="win-spinner-blue"></div>
+                </div>
+            </div>
+
+            <!-- 4. HLAVNÍ FÁZE INSTALACE (Modré pozadí + skákající tečky) -->
+            <div id="screen-main-install" class="screen hidden flex-col h-full w-full bg-blue-600 text-white p-8 md:p-16 overflow-y-auto">
+                <div class="max-w-4xl space-y-6">
+                    <div>
+                        <h2 class="text-3xl font-bold tracking-wide mb-2">Instalace Windows 11</h2>
+                        <p class="text-xl text-blue-100 font-medium">Instalační proces NTS Windows Installer AR pracuje na instalaci systému:</p>
+                    </div>
+
+                    <div class="space-y-1 text-base text-blue-100 font-normal pl-1">
+                        <p>• Windows 11 26H2</p>
+                        <p>• Způsob instalace: Z USB média / ISO souboru</p>
+                        <p class="font-semibold text-white pt-1">• Nevypínat PC nebo notebook!</p>
+                    </div>
+
+                    <hr class="border-blue-400 opacity-40 my-6">
+
+                    <div>
+                        <h3 class="text-xl font-semibold mb-3 text-blue-50">Průběh:</h3>
+                        <p id="main-install-status" class="text-lg font-medium text-white min-h-[2rem]"></p>
+                        
+			<br>
+
+                        <!-- Skákající tečky s podsvitem -->
+                        <div class="dot-pulse mt-4">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. INSTALACE JE PŘIPRAVENA (Shrnutí a tlačítko Restartovat) -->
+            <div id="screen-ready" class="screen hidden flex-col h-full w-full bg-blue-600 text-white p-8 md:p-16 overflow-y-auto">
+                <div class="max-w-4xl space-y-6">
+                    <div>
+                        <h2 class="text-3xl font-bold mb-2">Instalace je připravena</h2>
+                        <p class="text-lg text-blue-100">Instalační proces NTS Windows Installer (AR) připravil tento počítač na instalaci Windows 11 26H2</p>
+                    </div>
+
+                    <hr class="border-blue-400 opacity-40">
+
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4 text-blue-50">Shrnutí, co bylo a bude provedeno</h3>
+                        <div class="space-y-2 text-base text-blue-100 pl-2">
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Složka na serveru vytvořena: <span id="summary-folder" class="font-semibold text-white"></span></p>
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Soubory iso byly zkopírovány z USB na jednotce E:</p>
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Soubory iso byly rozbaleny</p>
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Disk zformátován na NTFS</p>
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Instalace fází 1 - 4: Zápis na disk úspěšný</p>
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Vytvořeny oddíly disku</p>
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Na disku je dostatek místa pro instalaci</p>
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Integrita souborů ověřena: soubory a jejich hashe odpovídají</p>
+                            <p class="flex items-center gap-2"><span class="text-green-400 font-bold">✔</span> Tento počítač splňuje požadavky na Windows 11</p>
+
+                            <div class="my-4 border-t border-blue-500/30"></div>
+
+                            <p class="flex items-center gap-2"><span class="text-red-400 font-bold">🔴</span> Bude vytvořen uživatelský profil: <span id="summary-user" class="font-semibold text-white"></span></p>
+                            <p class="flex items-center gap-2"><span class="text-red-400 font-bold">🔴</span> Bude nainstalován Windows 11 26H2</p>
+                            <p class="flex items-center gap-2"><span class="text-red-400 font-bold">🔴</span> Systém bude aktivován ve verzi: Pro</p>
+                        </div>
+                    </div>
+
+                    <p class="text-sm text-blue-200 italic pt-2">Aby se mohlo pokračovat, počítač se musí restartovat a následně bude spuštěn v režimu SAFE_OS</p>
+
+                    <div class="pt-4">
+                        <button onclick="triggerRestartSequence()" class="bg-white text-blue-700 hover:bg-blue-50 active:bg-blue-100 font-semibold px-8 py-3 rounded-lg shadow-lg transition-all text-base">
+                            Restartovat nyní
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. MODRÝ RESTARTING SPINNER -->
+            <div id="screen-restarting-blue" class="screen hidden flex-col justify-center items-center h-full w-full bg-blue-600 text-white p-6">
+                <div class="text-center space-y-6">
+                    <h2 class="text-2xl md:text-3xl font-medium">Tento počítač se za chvilku restartuje...</h2>
+                    <div class="flex justify-center">
+                        <div class="win-spinner"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7. ČERNÁ OBRAZOVKA - TEXT "Restartování" -->
+            <div id="screen-black-text" class="screen hidden flex-col justify-center items-center h-full w-full bg-black text-white p-6">
+                <h2 class="text-3xl font-normal">Restartování</h2>
+            </div>
+
+            <!-- 8. ČISTĚ ČERNÁ OBRAZOVKA -->
+            <div id="screen-black-pure" class="screen hidden h-full w-full bg-black"></div>
+
+            <!-- 9. ČERNÁ OBRAZOVKA - PRACUJE SE NA INSTALACI + PROCENTA + PROSVIŠŤUJÍCÍ OTOČNÉ KOLEČKO BEZ PODKRESU -->
+            <div id="screen-black-progress" class="screen hidden flex-col justify-center items-center h-full w-full bg-black text-white p-6 text-center">
+                <div class="max-w-xl space-y-4 flex flex-col items-center">
+                    <h2 class="text-3xl font-normal">Pracuje se na instalaci</h2>
+                    <p class="text-red-500 font-semibold text-lg">Nevypínat počítač! Tahle operace může trvat velmi dlouho!</p>
+                    <p id="black-progress-percent" class="text-2xl font-medium text-slate-200 pt-2">Úspěšně hotovo: 0 %</p>
+                    
+                    <!-- Bílý otáčecí půlkruh bez dráhy -->
+                    <div class="pt-6 flex justify-center">
+                        <div class="arc-spinner"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 10. ZÁVĚREČNÁ BÍLÁ OBRAZOVKA (Vytváření profilu + Hotovo) -->
+            <div id="screen-final" class="screen hidden flex-col justify-center items-center h-full w-full bg-white text-slate-900 p-6 text-center">
+                <div id="final-creating-state" class="space-y-6 flex flex-col items-center">
+                    <h2 class="text-3xl font-semibold text-slate-800">Vytváření uživatelského profilu...</h2>
+                    <div class="win-spinner-blue"></div>
+                </div>
+
+                <div id="final-complete-state" class="hidden space-y-8 flex flex-col items-center max-w-lg">
+                    <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-3xl shadow-inner">
+                        ✓
+                    </div>
+                    <h2 class="text-3xl font-bold text-slate-900">Instalace Windows 11 26H2 úspěšně dokončena</h2>
+                    <button onclick="finishSimulation()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-xl shadow-lg transition-all text-lg">
+                        Dokončeno
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT SIMULAČNÍ LOGIKA -->
+    <script>
+        // Data formuláře
+        let config = {
+            pcName: '',
+            userName: '',
+            folderName: '',
+            speedMode: '1'
+        };
+
+        // Časovače v sekundách [Standard, 2x, 10x, 1min]
+        const TIMERS = {
+            step1_prepFiles:    { std: 135, s2: 67, s10: 10, m1: 60 }, // 2m 15s / 1m 7s / 10s / 1m
+            step2_ntsServer:    { std: 140, s2: 70, s10: 30, m1: 60 }, // 2m 20s / 1m 10s / 30s / 1m
+            step3_createFolder: { std: 60,  s2: 30, s10: 10, m1: 60 }, // 1m / 30s / 10s / 1m
+            step4_launchTool:   { std: 200, s2: 90, s10: 40, m1: 60 }, // 3m 20s / 1m 30s / 40s / 1m
+            
+            // Fáze modré instalace
+            m1_copyIso:         { std: 1920, s2: 960, s10: 120, m1: 60 }, // 32m / 16m / 2m / 1m
+            m2_extractIso:      { std: 900,  s2: 420, s10: 60,  m1: 60 }, // 15m / 7m / 1m / 1m
+            m3_ntfs:            { std: 480,  s2: 240, s10: 40,  m1: 60 }, // 8m / 4m / 40s / 1m
+            m4_partitions:      { std: 600,  s2: 300, s10: 20,  m1: 60 }, // 10m / 5m / 20s / 1m
+            m5_phase1:          { std: 1980, s2: 1020,s10: 240, m1: 60 }, // 33m / 17m / 4m / 1m
+            m6_phase2:          { std: 600,  s2: 300, s10: 50,  m1: 60 }, // 10m / 5m / 50s / 1m
+            m7_phase3:          { std: 1200, s2: 600, s10: 60,  m1: 60 }, // 20m / 10m / 1m / 1m
+            m8_phase4:          { std: 300,  s2: 150, s10: 15,  m1: 60 }, // 5m / 2m 30s / 15s / 1m
+            m9_verifyFiles:     { std: 720,  s2: 360, s10: 90,  m1: 60 }, // 12m / 6m / 1m 30s / 1m
+            m10_checkSpace:     { std: 300,  s2: 120, s10: 16,  m1: 60 }, // 5m / 2m / 16s / 1m
+            m11_checkEligibility:{std: 600,  s2: 300, s10: 120, m1: 60 }, // 10m / 5m / 2m / 1m
+
+            // Po kliknutí na Restartovat
+            restartSpinner:     { std: 300,  s2: 120, s10: 30,  m1: 60 }, // 5m / 2m / 30s / 1m
+            restartText:        { std: 5,    s2: 5,   s10: 5,   m1: 5 },  // Vždy 5s
+            blackPure:          { std: 1560, s2: 840, s10: 120, m1: 60 }, // 26m / 14m / 2m / 1m
+
+            // Procenta na černé obrazovce
+            p0:                 { std: 3000, s2: 1500,s10: 480, m1: 60 }, // 50m / 25m / 8m / 1m
+            p1:                 { std: 1200, s2: 600, s10: 120, m1: 60 }, // 20m / 10m / 2m / 1m
+            p30:                { std: 1500, s2: 720, s10: 180, m1: 60 }, // 25m / 12m / 3m / 1m
+            p66:                { std: 780,  s2: 390, s10: 90,  m1: 60 }, // 13m / 6m 30s / 1m 30s / 1m
+            p98:                { std: 960,  s2: 480, s10: 60,  m1: 60 }, // 16m / 8m / 1m / 1m
+            p100:               { std: 300,  s2: 150, s10: 25,  m1: 60 }, // 5m / 2m 30s / 25s / 1m
+
+            // Závěrečné vytváření profilu
+            finalProfile:       { std: 300,  s2: 150, s10: 40,  m1: 60 }  // 5m / 2m 30s / 40s / 1m
+        };
+
+        let currentTimeoutId = null;
+        let currentIntervalId = null;
+
+        // Pomocná funkce pro vytažení přesného času dle režimu
+        function getDuration(timerKey) {
+            const t = TIMERS[timerKey];
+            if (!t) return 5;
+            switch (config.speedMode) {
+                case '2': return t.s2;
+                case '10': return t.s10;
+                case '1min': return t.m1;
+                default: return t.std;
+            }
+        }
+
+        // --- AUDIO SYNTHESIZER & FALLBACK SYSTEM ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(soundType) {
+            let filename = '';
+            switch (soundType) {
+                case 1: filename = 'sound1_welcome.opus'; break;
+                case 2: filename = 'sound2_install.opus'; break;
+                case 3: filename = 'sound3_attention.opus'; break;
+                case 4: filename = 'sound4_complete.opus'; break;
+            }
+
+            const audio = new Audio(filename);
+            audio.play().catch(() => {
+                // Pokud externí soubor neexistuje nebo selže, přehraj syntetizovaný zvuk přes Web Audio API
+                playSynthesizedSound(soundType);
+            });
+        }
+
+        function playSynthesizedSound(type) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const now = audioCtx.currentTime;
+
+            if (type === 1) { // Uvítací znělka (Akrord/Chime - cca 4s)
+                const freqs = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+                freqs.forEach((f, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now + idx * 0.15);
+                    gain.gain.setValueAtTime(0, now);
+                    gain.gain.linearRampToValueAtTime(0.15, now + idx * 0.15 + 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.8);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.15);
+                    osc.stop(now + 4.0);
+                });
+            } else if (type === 2) { // Instalační znělka (Soft Chime)
+                const freqs = [440, 554.37, 659.25]; // A4, C#5, E5
+                freqs.forEach((f, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(f, now + idx * 0.2);
+                    gain.gain.setValueAtTime(0.15, now + idx * 0.2);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.2);
+                    osc.stop(now + 2.8);
+                });
+            } else if (type === 3) { // Upozornění / Akce (Attention Bell)
+                const freqs = [587.33, 880]; // D5, A5
+                freqs.forEach((f, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now + idx * 0.18);
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.18);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.18);
+                    osc.stop(now + 2.0);
+                });
+            } else if (type === 4) { // Dokončení (Fanfára/Success Chime)
+                const freqs = [392.00, 523.25, 659.25, 783.99]; // G4, C5, E5, G5
+                freqs.forEach((f, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now + idx * 0.12);
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.2);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.12);
+                    osc.stop(now + 3.5);
+                });
+            }
+        }
+
+        // PREPÍNÁNÍ OBRAZOVEK
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('flex'));
+            const target = document.getElementById(screenId);
+            if (target) {
+                target.classList.remove('hidden');
+                if (!target.classList.contains('screen-black-pure')) {
+                    target.classList.add('flex');
+                }
+            }
+        }
+
+        function setNtsHeader(visible) {
+            const header = document.getElementById('nts-header');
+            if (visible) {
+                header.classList.remove('hidden');
+            } else {
+                header.classList.add('hidden');
+            }
+        }
+
+        // KONTROLA FORMULÁŘE
+        function checkForm() {
+            const pc = document.getElementById('input-pc-name').value.trim();
+            const user = document.getElementById('input-user-name').value.trim();
+            const folder = document.getElementById('input-folder-name').value.trim();
+            const btn = document.getElementById('btn-install');
+
+            if (pc !== '' && user !== '' && folder !== '') {
+                btn.classList.remove('hidden');
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+
+        // START SIMULACE Z ÚVODU
+        function startSimulation() {
+            // Načíst zvolenou rychlost
+            const selectedSpeed = document.querySelector('input[name="speed"]:checked');
+            if (selectedSpeed) {
+                config.speedMode = selectedSpeed.value;
+            }
+
+            // Celá obrazovka
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(() => {});
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            }
+
+            // Přehraj zvuk 1
+            playSound(1);
+
+            // Přepnout na formulář
+            showScreen('screen-form');
+        }
+
+        // ODSTARTUJE INSTALACI PO KLIKNUTÍ NA "INSTALOVAT" VE FORMULÁŘI
+        function startInstallationProcess() {
+            config.pcName = document.getElementById('input-pc-name').value.trim();
+            config.userName = document.getElementById('input-user-name').value.trim();
+            config.folderName = document.getElementById('input-folder-name').value.trim();
+
+            // Krok 1: Modrá obrazovka "Probíhá příprava souborů..."
+            showScreen('screen-prep-files');
+            playSound(1);
+
+            runStep('step1_prepFiles', () => {
+                // Zapnout NTS pruh nahoře pro zbývající fáze
+                setNtsHeader(true);
+                runWhiteSteps();
+            });
+        }
+
+        // BÍLÉ KROKY S SPINNEREM
+        function runWhiteSteps() {
+            showScreen('screen-white-step');
+
+            // Krok 2
+            document.getElementById('white-step-title').innerText = "Připravuje se instalace";
+            document.getElementById('white-step-subtitle').innerText = "Čeká se na odpověď serveru NTS-System\\Windows\\Windows11\\PC\\";
+
+            runStep('step2_ntsServer', () => {
+                // Krok 3
+                document.getElementById('white-step-title').innerText = "Připravuje se instalace";
+                document.getElementById('white-step-subtitle').innerText = `Vytváření složky ${config.folderName} na serveru NTS-System\\Windows\\Windows11\\PC\\`;
+
+                runStep('step3_createFolder', () => {
+                    // Krok 4
+                    document.getElementById('white-step-title').innerText = "Připravuje se instalace";
+                    document.getElementById('white-step-subtitle').innerText = "Moment, probíhá spouštění instalačního nástroje.";
+
+                    runStep('step4_launchTool', () => {
+                        runMainBlueInstallation();
+                    });
+                });
+            });
+        }
+
+        // MODRÁ FÁZE S PROSVIŠŤUJÍCÍMI SKÁKAJÍCÍMI TEČKAMI
+        function runMainBlueInstallation() {
+            showScreen('screen-main-install');
+            playSound(2);
+
+            const steps = [
+                { key: 'm1_copyIso', text: "Kopírují se ISO soubory z USB disku na jednotce E:" },
+                { key: 'm2_extractIso', text: "Rozbalování iso souborů (celkem 8,3 GB)" },
+                { key: 'm3_ntfs', text: "Vytváření datových struktur a souborového systému NTFS" },
+                { key: 'm4_partitions', text: "Vytváření oddílů (tabulka oddílů: Obnovení, Primární, GPT, System)" },
+                { key: 'm5_phase1', text: "Fáze: Instalace, na úrovni 1" },
+                { key: 'm6_phase2', text: "Fáze: Instalace, na úrovni 2" },
+                { key: 'm7_phase3', text: "Fáze: Instalace, na úrovni 3" },
+                { key: 'm8_phase4', text: "Fáze: Instalace, na úrovni 4" },
+                { key: 'm9_verifyFiles', text: "Ověřování, že připravené soubory jsou v pořádku" },
+                { key: 'm10_checkSpace', text: "Ověřuje se, zda je na tomto počítači dost místa" },
+                { key: 'm11_checkEligibility', text: "Kontroluje se, zda je tento počítač způsobilý pro Windows 11" }
+            ];
+
+            let index = 0;
+
+            function executeMainStep() {
+                if (index >= steps.length) {
+                    showReadyScreen();
+                    return;
+                }
+
+                const current = steps[index];
+                document.getElementById('main-install-status').innerText = current.text;
+
+                runStep(current.key, () => {
+                    index++;
+                    executeMainStep();
+                });
+            }
+
+            executeMainStep();
+        }
+
+        // OBRAZOVKA "INSTALACE JE PŘIPRAVENA"
+        function showReadyScreen() {
+            document.getElementById('summary-folder').innerText = config.folderName;
+            document.getElementById('summary-user').innerText = config.userName;
+            
+            showScreen('screen-ready');
+            playSound(3);
+        }
+
+        // SEKVENCE RESTARTU
+        function triggerRestartSequence() {
+            // Modrý restart spinner
+            showScreen('screen-restarting-blue');
+
+            runStep('restartSpinner', () => {
+                // Černý text "Restartování"
+                setNtsHeader(false); // Pruh schovat během restartu
+                showScreen('screen-black-text');
+
+                runStep('restartText', () => {
+                    // Čistě černá obrazovka
+                    showScreen('screen-black-pure');
+
+                    runStep('blackPure', () => {
+                        runBlackProgressSequence();
+                    });
+                });
+            });
+        }
+
+        // PROCENTA NA ČERNÉ OBRAZOVCE
+        function runBlackProgressSequence() {
+            showScreen('screen-black-progress');
+
+            const percentSteps = [
+                { key: 'p0', text: 'Úspěšně hotovo: 0 %' },
+                { key: 'p1', text: 'Úspěšně hotovo: 1 %' },
+                { key: 'p30', text: 'Úspěšně hotovo: 30 %' },
+                { key: 'p66', text: 'Úspěšně hotovo: 66 %' },
+                { key: 'p98', text: 'Úspěšně hotovo: 98 %' },
+                { key: 'p100', text: 'Úspěšně hotovo: 100 %' }
+            ];
+
+            let idx = 0;
+
+            function executePercentStep() {
+                if (idx >= percentSteps.length) {
+                    runFinalStep();
+                    return;
+                }
+
+                const curr = percentSteps[idx];
+                document.getElementById('black-progress-percent').innerText = curr.text;
+
+                runStep(curr.key, () => {
+                    idx++;
+                    executePercentStep();
+                });
+            }
+
+            executePercentStep();
+        }
+
+        // ZÁVĚREČNÁ OBRAZOVKA
+        function runFinalStep() {
+            showScreen('screen-final');
+            document.getElementById('final-creating-state').classList.remove('hidden');
+            document.getElementById('final-complete-state').classList.add('hidden');
+
+            runStep('finalProfile', () => {
+                document.getElementById('final-creating-state').classList.add('hidden');
+                document.getElementById('final-complete-state').classList.remove('hidden');
+                document.getElementById('final-complete-state').classList.add('flex');
+                playSound(4);
+            });
+        }
+
+        // DOKONČENÍ SIMULACE
+        function finishSimulation() {
+            // Opustit fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+
+            // Vynulovat vstupy a vrátit se na začátek
+            document.getElementById('input-pc-name').value = '';
+            document.getElementById('input-user-name').value = '';
+            document.getElementById('input-folder-name').value = '';
+            checkForm();
+
+            setNtsHeader(false);
+            showScreen('screen-welcome');
+        }
+
+        // POMOCNÝ ČASOVAČ SE ZOBRAZENÍM ZBÝVAJÍCÍHO ČASU
+        function runStep(timerKey, onComplete) {
+            if (currentTimeoutId) clearTimeout(currentTimeoutId);
+            if (currentIntervalId) clearInterval(currentIntervalId);
+
+            let secondsLeft = getDuration(timerKey);
+            updateTimerDisplay(secondsLeft);
+
+            currentIntervalId = setInterval(() => {
+                secondsLeft--;
+                if (secondsLeft <= 0) {
+                    clearInterval(currentIntervalId);
+                } else {
+                    updateTimerDisplay(secondsLeft);
+                }
+            }, 1000);
+
+            currentTimeoutId = setTimeout(() => {
+                if (currentIntervalId) clearInterval(currentIntervalId);
+                updateTimerDisplay(0);
+                onComplete();
+            }, secondsLeft * 1000);
+        }
+
+        function updateTimerDisplay(seconds) {
+            const timerEl = document.getElementById('timer-display');
+            if (timerEl) {
+                const m = Math.floor(seconds / 60);
+                const s = seconds % 60;
+                timerEl.innerText = `[Osobní nástroj: Rudolfský Adam, 2026]`;
+            }
+        }
+
+        // Zobrazení infobanneru o audio souborech na začátku
+        window.onload = function() {
+            const banner = document.getElementById('audio-info-banner');
+            banner.classList.remove('hidden');
+            setTimeout(() => {
+                banner.style.opacity = '0';
+                setTimeout(() => banner.remove(), 500);
+            }, 8000);
+        };
+    </script>
+</body>
+</html>
